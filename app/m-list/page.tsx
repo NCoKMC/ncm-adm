@@ -56,6 +56,7 @@ export default function MListPage() {
         setError('사역자 목록을 불러오는 중 오류가 발생했습니다.');
         return;
       }
+      console.log(data);
 
       // 데이터 구조 변환
       const transformedData = data?.map(item => ({

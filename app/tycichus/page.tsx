@@ -893,7 +893,7 @@ export default function TycichusPage({ searchParams }: { searchParams: Promise<{
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#1e3a8a]">
       <Navigation />
       <div className="container mx-auto p-6 max-w-4xl">
         <div className="flex justify-between items-center mb-8">

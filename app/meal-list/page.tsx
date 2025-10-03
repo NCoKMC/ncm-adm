@@ -168,8 +168,7 @@ export default function MealListPage() {
   return (
     <div className="min-h-screen bg-[#1e3a8a]">
       <Navigation />
-      
-      <main className="max-w-7xl mx-auto px-2 sm:px-3 md:px-4 lg:px-6 py-4 sm:py-5 md:py-6 lg:py-8">
+      <main className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8 py-4 sm:py-8">
         <div className="bg-white rounded-3xl p-2 sm:p-3 md:p-4 lg:p-6 shadow-lg">
           <div className="flex justify-between items-center mb-3 sm:mb-4 md:mb-5 lg:mb-6">
             <h1 className="text-base sm:text-lg md:text-xl lg:text-2xl font-bold text-gray-800">식사 확인 목록</h1>

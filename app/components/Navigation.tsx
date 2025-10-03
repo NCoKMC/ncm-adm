@@ -30,13 +30,13 @@ export default function Navigation() {
 
   const navItems = [
     { name: '대시보드', path: '/dashboard' },
-    { name: '예약 목록', path: '/reservations' },
-    { name: '방 목록', path: '/room-list' },
-    { name: '식사 확인', path: '/meal-check' },
-    { name: '식사 확인 목록', path: '/meal-list' },
+    // { name: '예약 목록', path: '/reservations' },
+    // { name: '방 목록', path: '/room-list' },
+    // { name: '식사 확인', path: '/meal-check' },
+    // { name: '식사 확인 목록', path: '/meal-list' },
     { name: '사역자 목록', path: '/m-list' },
-    { name: '사역자등록', path: '/tycichus' },
-    { name: '휴가신청', path: '/vacation' },
+    // { name: '사역자등록', path: '/tycichus' },
+    // { name: '휴가신청', path: '/vacation' },
     { name: '비밀번호 변경', path: '/change-password' },
   ];
 
