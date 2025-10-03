@@ -125,19 +125,20 @@ export default function MListPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#1e3a8a]">
       <Navigation />
       <div className="container mx-auto p-6 max-w-6xl">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold text-gray-800">사역자 목록</h1>
-          <button
-            onClick={handleAddNew}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:ring-4 focus:ring-blue-300 font-medium"
-          >
-            새 사역자 등록
-          </button>
+        <div className="bg-white p-4 rounded-lg shadow-md mb-6">
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-3xl font-bold text-gray-800">사역자 목록</h1>
+            <button
+              onClick={handleAddNew}
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:ring-4 focus:ring-blue-300 font-medium"
+            >
+              새 사역자 등록
+            </button>
+          </div>
         </div>
-
         {/* 검색 및 정렬 */}
         <div className="bg-white p-4 rounded-lg shadow-md mb-6">
           <div className="flex flex-col md:flex-row gap-4">

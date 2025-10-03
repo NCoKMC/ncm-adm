@@ -895,21 +895,22 @@ export default function TycichusPage({ searchParams }: { searchParams: Promise<{
   return (
     <div className="min-h-screen bg-[#1e3a8a]">
       <Navigation />
-      <div className="container mx-auto p-6 max-w-4xl">
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-800">
-            {isEditMode ? '사역자정보수정' : '사역자등록정보'}
-          </h1>
-          {isEditMode && (
-            <button
-              onClick={() => window.history.back()}
-              className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 focus:ring-4 focus:ring-gray-300 font-medium"
-            >
-              목록으로 돌아가기
-            </button>
-          )}
+      <div className="container mx-auto p-6 max-w-6xl">
+        <div className="bg-white p-4 rounded-lg shadow-md mb-6">
+          <div className="flex justify-between items-center mb-8">
+            <h1 className="text-3xl font-bold text-gray-800">
+              {isEditMode ? '사역자정보수정' : '사역자등록정보'}
+            </h1>
+            {isEditMode && (
+              <button
+                onClick={() => window.history.back()}
+                className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 focus:ring-4 focus:ring-gray-300 font-medium"
+              >
+                목록
+              </button>
+            )}
+          </div>
         </div>
-      
       <form className="space-y-8">
         {/* 사역자 기본 정보 */}
         <div className="bg-white p-6 rounded-lg shadow-md">
