@@ -10,8 +10,8 @@ interface MissionaryListItem {
   missionary_id: string;
   korean_name: string;
   gender: string;
-  mobile_phone: string;
-  email1: string;
+  mobile_phone: string | null;
+  email1: string | null;
   mission_name: string;
   created_at: string;
 }
@@ -34,7 +34,7 @@ export default function MListPage() {
       setLoading(true);
       setError(null);
 
-      // 사역자 기본 정보와 연락처 정보를 조인하여 가져오기
+      // 사역자 기본 정보와 연락처 정보를 조인하여 가져오기 (LEFT JOIN 사용)
       const { data, error } = await supabase
         .from('ncm_m10001')
         .select(`
@@ -44,7 +44,7 @@ export default function MListPage() {
           gender,
           mission_name,
           created_at,
-          ncm_m10002!inner (
+          ncm_m10002 (
             mobile_phone,
             email1
           )
@@ -59,16 +59,21 @@ export default function MListPage() {
       console.log(data);
 
       // 데이터 구조 변환
-      const transformedData = data?.map(item => ({
-        id: item.id,
-        missionary_id: item.missionary_id,
-        korean_name: item.korean_name,
-        gender: item.gender,
-        mobile_phone: item.ncm_m10002?.mobile_phone || '',
-        email1: item.ncm_m10002?.email1 || '',
-        mission_name: item.mission_name || '',
-        created_at: item.created_at
-      })) || [];
+      const transformedData = data?.map(item => {
+        // ncm_m10002는 배열이므로 첫 번째 요소를 가져옴
+        const contactInfo = Array.isArray(item.ncm_m10002) ? item.ncm_m10002[0] : item.ncm_m10002;
+        
+        return {
+          id: item.id,
+          missionary_id: item.missionary_id,
+          korean_name: item.korean_name,
+          gender: item.gender,
+          mobile_phone: contactInfo?.mobile_phone || null,
+          email1: contactInfo?.email1 || null,
+          mission_name: item.mission_name || '',
+          created_at: item.created_at
+        };
+      }) || [];
 
       setMissionaries(transformedData);
     } catch (error) {
@@ -256,10 +261,10 @@ export default function MListPage() {
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {missionary.mobile_phone || '-'}
+                        {missionary.mobile_phone ? missionary.mobile_phone : '-'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {missionary.email1 || '-'}
+                        {missionary.email1 ? missionary.email1 : '-'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {formatDate(missionary.created_at)}
