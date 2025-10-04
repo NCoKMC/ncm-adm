@@ -92,7 +92,7 @@ export default function LoginPage() {
           localStorage.removeItem('savedEmail');
         }
 
-        router.push('/dashboard');
+        router.push('/m-list');
       }
     } catch (error: any) {
       setError(error.message || '로그인 중 오류가 발생했습니다.');

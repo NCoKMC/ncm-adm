@@ -125,6 +125,8 @@ export default function TycichusPage({ searchParams }: { searchParams: Promise<{
   const [isEditMode, setIsEditMode] = useState(false);
   const [uploadingFiles, setUploadingFiles] = useState<{[key: string]: boolean}>({});
   const [uploadedFiles, setUploadedFiles] = useState<{[key: string]: string}>({});
+  const [deletingFiles, setDeletingFiles] = useState<{[key: string]: boolean}>({});
+  const [downloadingFiles, setDownloadingFiles] = useState<{[key: string]: boolean}>({});
 
   // searchParams를 컴포넌트 최상위에서 unwrap
   const params = use(searchParams);
@@ -232,25 +234,25 @@ export default function TycichusPage({ searchParams }: { searchParams: Promise<{
         const { data: consentData } = await supabase
           .from('ncm_m10003')
           .select('consent_given')
-          .eq('missionary_id', missionaryData.id)
+          .eq('missionary_id', missionaryData.missionary_id)
           .single();
 
         if (consentData) {
           setConsentToPrivacy(consentData.consent_given);
         }
-
+        console.log("missionaryData.id", missionaryData.missionary_id);
         // 업로드된 파일 정보 조회
         const { data: fileData } = await supabase
           .from('ncm_file_uploads')
           .select('file_type, original_filename')
-          .eq('missionary_id', missionaryData.id);
+          .eq('missionary_id', missionaryData.missionary_id);
 
         if (fileData) {
           const files: {[key: string]: string} = {};
           fileData.forEach(file => {
             files[file.file_type] = file.original_filename;
           });
-          console.log(files);
+          console.log("업로드된 파일 정보 조회", files);
           setUploadedFiles(files);
         }
       }
@@ -274,16 +276,16 @@ export default function TycichusPage({ searchParams }: { searchParams: Promise<{
     setAdditionalInfo(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleFileUpload = async (type: string, file: File, missionaryId?: string) => {
+  const handleFileUpload = async (type: string, file: File) => {
     if (!file) {
       alert('파일을 선택해주세요.');
       return;
     }
 
-    // 파일 크기 제한 (10MB)
-    const maxSize = 10 * 1024 * 1024; // 10MB
+    // 파일 크기 제한 (1MB)
+    const maxSize = 1 * 1024 * 1024; // 1MB
     if (file.size > maxSize) {
-      alert('파일 크기는 10MB를 초과할 수 없습니다.');
+      alert('파일 크기는 1MB를 초과할 수 없습니다.');
       return;
     }
 
@@ -301,22 +303,37 @@ export default function TycichusPage({ searchParams }: { searchParams: Promise<{
     setUploadingFiles(prev => ({ ...prev, [type]: true }));
 
     try {
+      // missionaryId 결정 로직
+      let currentMissionaryId: string;
+      
+      if (isEditMode) {
+        // 편집 모드: 기존 사역자 ID 사용
+        if (!missionaryInfo.missionaryId) {
+          alert('사역자 ID가 없습니다. 먼저 사역자 정보를 입력해주세요.');
+          return;
+        }
+        currentMissionaryId = missionaryInfo.missionaryId;
+      } else {
+        // 새 등록 모드: 임시 ID 사용
+        currentMissionaryId = 'temp';
+      }
+
       // 파일명 생성 (타임스탬프 + 원본 파일명)
       const timestamp = Date.now();
-      const storedFilename = `${timestamp}_${file.name}`;
-      const filePath = `missionaries/${missionaryId || 'temp'}/${type}/${storedFilename}`;
+      const storedFilename = `${timestamp}_${currentMissionaryId}`;
+      const filePath = `missionaries/${currentMissionaryId}/${type}/${storedFilename}`;
 
-      console.log('파일 업로드 시작:', {
-        fileName: file.name,
-        fileSize: file.size,
-        fileType: file.type,
-        filePath: filePath,
-        missionaryId: missionaryId || 'temp'
-      });
+      console.log('=== 파일 업로드 디버깅 정보 ===');
+      console.log('파일명:', file.name);
+      console.log('파일 크기:', file.size);
+      console.log('파일 타입:', file.type);
+      console.log('저장 경로:', filePath);
+      console.log('사역자 ID:', currentMissionaryId);
+      console.log('편집 모드:', isEditMode);
 
       // Supabase Storage에 파일 업로드
       const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('missionary-files')
+        .from('ncm_missionary_files')
         .upload(filePath, file, {
           cacheControl: '3600',
           upsert: false
@@ -338,17 +355,24 @@ export default function TycichusPage({ searchParams }: { searchParams: Promise<{
         return;
       }
 
-      console.log('파일 업로드 성공 missionary-files :', uploadData);
+      console.log('파일 업로드 성공:', uploadData);
+      
+      // 업로드 후 파일이 실제로 저장되었는지 확인
+      const { data: uploadedFiles, error: checkError } = await supabase.storage
+        .from('ncm_missionary_files')
+        .list(`missionaries/${currentMissionaryId}/${type}`);
+      console.log('업로드 후 파일 확인:', uploadedFiles);
+      console.log('업로드 후 파일 확인 에러:', checkError);
 
       // 업로드된 파일명을 상태에 저장
       setUploadedFiles(prev => ({ ...prev, [type]: file.name }));
       
-      console.log('missionaryId :', missionaryId);
+      console.log('currentMissionaryId:', currentMissionaryId);
       
-      // 파일 정보를 데이터베이스에 저장 (새 등록 시에는 나중에 저장)
-      if (missionaryId && missionaryId !== 'temp') {
+      // 파일 정보를 데이터베이스에 저장 (편집 모드에서만 즉시 저장)
+      if (isEditMode && currentMissionaryId !== 'temp') {
         console.log('데이터베이스에 파일 정보 저장:', {
-          missionary_id: missionaryId,
+          missionary_id: currentMissionaryId,
           file_type: type,
           original_filename: file.name,
           stored_filename: storedFilename,
@@ -360,7 +384,7 @@ export default function TycichusPage({ searchParams }: { searchParams: Promise<{
         const { error: dbError } = await supabase
           .from('ncm_file_uploads')
           .insert([{
-            missionary_id: missionaryId,
+            missionary_id: currentMissionaryId,
             file_type: type,
             original_filename: file.name,
             stored_filename: storedFilename,
@@ -373,7 +397,17 @@ export default function TycichusPage({ searchParams }: { searchParams: Promise<{
           console.error('Database error:', dbError);
           alert('파일 정보 저장 중 오류가 발생했습니다.');
         } else {
-          alert(`${type} 파일이 성공적으로 업로드되었습니다.`);
+          let typeInfo = '';
+          if(type === 'photo') {
+            typeInfo = '사역자사진';
+          }else if(type === 'familyPhoto') {
+            typeInfo = '가족사진';
+          }else if(type === 'spousePhoto') {
+            typeInfo = '배우자사진';
+          }else if(type === 'attached') {
+            typeInfo = '사역자첨부파일';
+          }
+          alert(`${typeInfo}이 성공적으로 업로드되었습니다.`);
         }
       } else {
         // 새 등록 시에는 파일만 업로드하고 데이터베이스 저장은 나중에
@@ -389,13 +423,302 @@ export default function TycichusPage({ searchParams }: { searchParams: Promise<{
     }
   };
 
-  const handleFileDelete = (type: string) => {
+  const handleFileDownload = async (type: string) => {
+    try {
+      // missionaryId 결정 로직
+      let currentMissionaryId: string;
+      
+      if (isEditMode) {
+        // 편집 모드: 기존 사역자 ID 사용
+        if (!missionaryInfo.missionaryId) {
+          alert('사역자 ID가 없습니다.');
+          return;
+        }
+        currentMissionaryId = missionaryInfo.missionaryId;
+      } else {
+        // 새 등록 모드: 임시 ID 사용
+        currentMissionaryId = 'temp';
+      }
+
+      // 다운로드 상태 설정
+      setDownloadingFiles(prev => ({ ...prev, [type]: true }));
+
+      // 파일 경로 구성
+      const filePath = `missionaries/${currentMissionaryId}/${type}`;
+      
+      console.log('파일 다운로드 시작:', {
+        fileType: type,
+        filePath: filePath,
+        missionaryId: currentMissionaryId,
+        isEditMode: isEditMode
+      });
+
+      // 1. 파일 목록 조회
+      const { data: files, error: listError } = await supabase.storage
+        .from('ncm_missionary_files')
+        .list(filePath);
+
+      if (listError) {
+        console.error('파일 목록 조회 오류:', listError);
+        alert('파일을 찾을 수 없습니다.');
+        return;
+      }
+
+      if (!files || files.length === 0) {
+        alert('다운로드할 파일이 없습니다.');
+        return;
+      }
+
+      // 2. 첫 번째 파일 다운로드 (각 타입당 하나의 파일만 있다고 가정)
+      const fileToDownload = files[0];
+      const fullFilePath = `${filePath}/${fileToDownload.name}`;
+      
+      console.log('다운로드할 파일:', fullFilePath);
+
+      // 3. 파일 다운로드
+      const { data: fileData, error: downloadError } = await supabase.storage
+        .from('ncm_missionary_files')
+        .download(fullFilePath);
+
+      if (downloadError) {
+        console.error('파일 다운로드 오류:', downloadError);
+        alert('파일 다운로드 중 오류가 발생했습니다: ' + downloadError.message);
+        return;
+      }
+
+      // 4. 파일 다운로드 처리
+      const url = URL.createObjectURL(fileData);
+      const link = document.createElement('a');
+      link.href = url;
+      
+      // 원본 파일명 사용 (타임스탬프 제거)
+      const originalFileName = uploadedFiles[type] || fileToDownload.name;
+      link.download = originalFileName;
+      
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      // URL 해제
+      URL.revokeObjectURL(url);
+
+      // 5. 성공 메시지
+      let typeInfo = '';
+      if(type === 'photo') {
+        typeInfo = '사역자사진';
+      } else if(type === 'familyPhoto') {
+        typeInfo = '가족사진';
+      } else if(type === 'spousePhoto') {
+        typeInfo = '배우자사진';
+      } else if(type === 'attached') {
+        typeInfo = '사역자첨부파일';
+      } else {
+        typeInfo = type;
+      }
+      
+      alert(`${typeInfo} 파일이 성공적으로 다운로드되었습니다.`);
+
+    } catch (error) {
+      console.error('파일 다운로드 중 오류:', error);
+      alert('파일 다운로드 중 예상치 못한 오류가 발생했습니다.');
+    } finally {
+      // 다운로드 상태 해제
+      setDownloadingFiles(prev => ({ ...prev, [type]: false }));
+    }
+  };
+
+  const handleFileDelete = async (type: string) => {
+    if (!confirm(`${type} 파일을 정말 삭제하시겠습니까?`)) {
+      return;
+    }
+
+    // 삭제 상태 설정
+    setDeletingFiles(prev => ({ ...prev, [type]: true }));
+
+    try {
+      // missionaryId 결정 로직
+      let currentMissionaryId: string;
+      
+      if (isEditMode) {
+        // 편집 모드: 기존 사역자 ID 사용
+        if (!missionaryInfo.missionaryId) {
+          alert('사역자 ID가 없습니다.');
+          return;
+        }
+        currentMissionaryId = missionaryInfo.missionaryId;
+      } else {
+        // 새 등록 모드: 임시 ID 사용
+        currentMissionaryId = 'temp';
+      }
+
+      // 파일 경로 구성
+      const filePath = `missionaries/${currentMissionaryId}/${type}`;
+      
+      console.log('파일 삭제 시작:', {
+        fileType: type,
+        filePath: filePath,
+        missionaryId: currentMissionaryId,
+        isEditMode: isEditMode
+      });
+
+      // 1. Storage에서 파일 목록 조회
+      console.log("=== 파일 삭제 디버깅 정보 ===");
+      console.log("파일 타입:", type);
+      console.log("현재 사역자 ID:", currentMissionaryId);
+      console.log("편집 모드:", isEditMode);
+      console.log("파일 경로:", filePath);
+      
+      // 인증 상태 확인
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      console.log("인증된 사용자:", user);
+      console.log("인증 에러:", authError);
+      
+      // 먼저 루트 폴더부터 확인
+      const { data: rootFiles, error: rootError } = await supabase.storage
+        .from('ncm_missionary_files')
+        .list('');
+      console.log("루트 폴더 내용:", rootFiles);
+      console.log("루트 폴더 에러:", rootError);
+
+      // 사역자 폴더 확인
+      const { data: missionaryFiles, error: missionaryError } = await supabase.storage
+        .from('ncm_missionary_files')
+        .list('missionaries');
+      console.log("missionaries 폴더 내용:", missionaryFiles);
+      console.log("missionaries 폴더 에러:", missionaryError);
+
+      // 특정 사역자 폴더 확인
+      const missionaryFolderPath = `missionaries/${currentMissionaryId}`;
+      const { data: specificMissionaryFiles, error: specificMissionaryError } = await supabase.storage
+        .from('ncm_missionary_files')
+        .list(missionaryFolderPath);
+      console.log(`${missionaryFolderPath} 폴더 내용:`, specificMissionaryFiles);
+      console.log(`${missionaryFolderPath} 폴더 에러:`, specificMissionaryError);
+      
+      // 모든 사역자 폴더 확인
+      if (missionaryFiles && missionaryFiles.length > 0) {
+        console.log("=== 모든 사역자 폴더 내용 ===");
+        for (const folder of missionaryFiles) {
+          if (folder.name) {
+            const { data: folderContent } = await supabase.storage
+              .from('ncm_missionary_files')
+              .list(`missionaries/${folder.name}`);
+            console.log(`missionaries/${folder.name} 내용:`, folderContent);
+          }
+        }
+      }
+
+      // 최종 타겟 폴더 조회
+      const { data: files, error: listError } = await supabase.storage
+        .from('ncm_missionary_files')
+        .list(filePath);
+
+      console.log("조회된 파일 목록:", files);
+      console.log("파일 조회 에러:", listError);
+
+      if (listError) {
+        console.error('파일 목록 조회 오류:', listError);
+        console.error('에러 메시지:', listError.message);
+        console.error('에러 상세:', listError);
+        
+        // 인증 관련 오류인지 확인
+        if (listError.message.includes('permission') || listError.message.includes('unauthorized') || listError.message.includes('auth')) {
+          alert('인증이 필요합니다. 로그인 후 다시 시도해주세요.');
+          return;
+        }
+        
+        // 폴더가 존재하지 않는 경우는 정상적인 상황일 수 있음
+        if (!listError.message.includes('not found') && !listError.message.includes('No such file')) {
+          alert('파일 목록 조회 중 오류가 발생했습니다: ' + listError.message);
+          return;
+        }
+      }
+
+      // 2. 파일이 있는 경우 삭제
+      if (files && files.length > 0) {
+        const filePathsToDelete = files.map(file => `${filePath}/${file.name}`);
+        console.log("삭제할 파일 경로들:", filePathsToDelete);
+        console.log("삭제할 파일 개수:", files.length);
+        
+        const { error: storageError } = await supabase.storage
+          .from('ncm_missionary_files')
+          .remove(filePathsToDelete);
+
+        if (storageError) {
+          console.error('Storage 삭제 오류:', storageError);
+          alert('파일 삭제 중 오류가 발생했습니다: ' + storageError.message);
+          return;
+        }
+        
+        console.log('파일 삭제 완료:', filePathsToDelete.length, '개 파일');
+      } else {
+        console.log('삭제할 파일이 없습니다.');
+        console.log('files 값:', files);
+        console.log('files 길이:', files ? files.length : 'null/undefined');
+        
+        // 파일이 없는 경우에도 사용자에게 알림
+        let typeInfo = '';
+        if(type === 'photo') {
+          typeInfo = '사역자사진';
+        } else if(type === 'familyPhoto') {
+          typeInfo = '가족사진';
+        } else if(type === 'spousePhoto') {
+          typeInfo = '배우자사진';
+        } else if(type === 'attached') {
+          typeInfo = '사역자첨부파일';
+        } else {
+          typeInfo = type;
+        }
+        
+        alert(`${typeInfo} 파일이 존재하지 않습니다.`);
+        return;
+      }
+      
+      // 3. 데이터베이스에서 파일 정보 삭제 (편집 모드에서만)
+      if (isEditMode && currentMissionaryId !== 'temp') {
+        const { error: dbError } = await supabase
+          .from('ncm_file_uploads')
+          .delete()
+          .eq('missionary_id', currentMissionaryId)
+          .eq('file_type', type);
+
+        if (dbError) {
+          console.error('데이터베이스 삭제 오류:', dbError);
+          alert('파일 정보 삭제 중 오류가 발생했습니다.');
+          return;
+        }
+      }
+
+      // 4. 로컬 상태에서 파일 정보 제거
     setUploadedFiles(prev => {
       const newFiles = { ...prev };
       delete newFiles[type];
       return newFiles;
     });
-    alert(`${type} 파일이 삭제되었습니다.`);
+
+      // 5. 성공 메시지
+      let typeInfo = '';
+      if(type === 'photo') {
+        typeInfo = '사역자사진';
+      } else if(type === 'familyPhoto') {
+        typeInfo = '가족사진';
+      } else if(type === 'spousePhoto') {
+        typeInfo = '배우자사진';
+      } else if(type === 'attached') {
+        typeInfo = '사역자첨부파일';
+      } else {
+        typeInfo = type;
+      }
+      
+      alert(`${typeInfo}이 성공적으로 삭제되었습니다.`);
+
+    } catch (error) {
+      console.error('파일 삭제 중 오류:', error);
+      alert('파일 삭제 중 예상치 못한 오류가 발생했습니다.');
+    } finally {
+      // 삭제 상태 해제
+      setDeletingFiles(prev => ({ ...prev, [type]: false }));
+    }
   };
 
   const handleSubmit = async () => {
@@ -606,7 +929,7 @@ export default function TycichusPage({ searchParams }: { searchParams: Promise<{
           
           // Storage에서 파일 이동 (복사 후 삭제)
           const { data: files } = await supabase.storage
-            .from('missionary-files')
+            .from('ncm_missionary_files')
             .list(`missionaries/temp/${fileType}`);
           
           if (files && files.length > 0) {
@@ -616,18 +939,18 @@ export default function TycichusPage({ searchParams }: { searchParams: Promise<{
               
               // 파일 다운로드
               const { data: fileData } = await supabase.storage
-                .from('missionary-files')
+                .from('ncm_missionary_files')
                 .download(oldFilePath);
               
               if (fileData) {
                 // 새 위치에 업로드
                 await supabase.storage
-                  .from('missionary-files')
+                  .from('ncm_missionary_files')
                   .upload(newFilePath, fileData);
                 
                 // 임시 파일 삭제
                 await supabase.storage
-                  .from('missionary-files')
+                  .from('ncm_missionary_files')
                   .remove([oldFilePath]);
                 
                 // 데이터베이스에 파일 정보 저장
@@ -874,6 +1197,8 @@ export default function TycichusPage({ searchParams }: { searchParams: Promise<{
       publicationName: ''
     });
     setUploadedFiles({}); // Reset uploaded files
+    setDeletingFiles({}); // Reset deleting files
+    setDownloadingFiles({}); // Reset downloading files
   };
 
   if (loading) {
@@ -1120,7 +1445,10 @@ export default function TycichusPage({ searchParams }: { searchParams: Promise<{
               </div>
             </div>
             <div className="md:col-span-3">
-              <label className="block text-sm font-medium mb-1">사진파일</label>
+              <label className="block text-sm font-medium mb-1">
+                사진파일 
+                <span className="text-red-500 text-xs ml-2">(최대 1MB)</span>
+              </label>
               <div className="flex items-center space-x-4">
                 <input
                   type="file"
@@ -1128,28 +1456,55 @@ export default function TycichusPage({ searchParams }: { searchParams: Promise<{
                   onChange={(e) => e.target.files && handleFileUpload('photo', e.target.files[0])}
                   className="hidden"
                   id="photo-upload"
+                  disabled={!!uploadedFiles.photo}
                 />
                 <label
                   htmlFor="photo-upload"
-                  className={`px-4 py-2 rounded-md cursor-pointer ${
-                    uploadingFiles.photo 
+                  className={`px-4 py-2 rounded-md ${
+                    uploadedFiles.photo
+                      ? 'bg-gray-400 cursor-not-allowed text-gray-600'
+                      : uploadingFiles.photo 
                       ? 'bg-gray-400 cursor-not-allowed' 
-                      : 'bg-blue-500 hover:bg-blue-600'
+                        : 'bg-blue-500 hover:bg-blue-600 cursor-pointer'
                   } text-white`}
                 >
-                  {uploadingFiles.photo ? '업로드 중...' : '파일 선택'}
+                  {uploadedFiles.photo 
+                    ? '파일 업로드됨' 
+                    : uploadingFiles.photo 
+                      ? '업로드 중...' 
+                      : '파일 선택'
+                  }
                 </label>
                 <span className={`text-sm ${uploadedFiles.photo ? 'text-green-600' : 'text-gray-500'}`}>
                   {uploadedFiles.photo ? uploadedFiles.photo : '선택한 파일 없음'}
                 </span>
                 {uploadedFiles.photo && (
-                  <button
-                    type="button"
-                    onClick={() => handleFileDelete('photo')}
-                    className="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600"
-                  >
-                    파일삭제
-                  </button>
+                  <div className="flex space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => handleFileDownload('photo')}
+                      disabled={downloadingFiles.photo}
+                      className={`px-4 py-2 rounded-md ${
+                        downloadingFiles.photo 
+                          ? 'bg-gray-400 cursor-not-allowed' 
+                          : 'bg-green-500 hover:bg-green-600'
+                      } text-white`}
+                    >
+                      {downloadingFiles.photo ? '다운로드 중...' : '다운로드'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleFileDelete('photo')}
+                      disabled={deletingFiles.photo}
+                      className={`px-4 py-2 rounded-md ${
+                        deletingFiles.photo 
+                          ? 'bg-gray-400 cursor-not-allowed' 
+                          : 'bg-red-500 hover:bg-red-600'
+                      } text-white`}
+                    >
+                      {deletingFiles.photo ? '삭제 중...' : '파일삭제'}
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
@@ -1332,7 +1687,10 @@ export default function TycichusPage({ searchParams }: { searchParams: Promise<{
               </div>
             </div>
             <div className="md:col-span-3">
-              <label className="block text-sm font-medium mb-1">사진파일</label>
+              <label className="block text-sm font-medium mb-1">
+                사진파일 
+                <span className="text-red-500 text-xs ml-2">(최대 1MB)</span>
+              </label>
               <div className="flex items-center space-x-4">
                 <input
                   type="file"
@@ -1340,28 +1698,55 @@ export default function TycichusPage({ searchParams }: { searchParams: Promise<{
                   onChange={(e) => e.target.files && handleFileUpload('spousePhoto', e.target.files[0])}
                   className="hidden"
                   id="spouse-photo-upload"
+                  disabled={!!uploadedFiles.spousePhoto}
                 />
                 <label
                   htmlFor="spouse-photo-upload"
-                  className={`px-4 py-2 rounded-md cursor-pointer ${
-                    uploadingFiles.spousePhoto 
+                  className={`px-4 py-2 rounded-md ${
+                    uploadedFiles.spousePhoto
+                      ? 'bg-gray-400 cursor-not-allowed text-gray-600'
+                      : uploadingFiles.spousePhoto 
                       ? 'bg-gray-400 cursor-not-allowed' 
-                      : 'bg-green-500 hover:bg-green-600'
+                        : 'bg-green-500 hover:bg-green-600 cursor-pointer'
                   } text-white`}
                 >
-                  {uploadingFiles.spousePhoto ? '업로드 중...' : '파일 선택'}
+                  {uploadedFiles.spousePhoto 
+                    ? '파일 업로드됨' 
+                    : uploadingFiles.spousePhoto 
+                      ? '업로드 중...' 
+                      : '파일 선택'
+                  }
                 </label>
                 <span className={`text-sm ${uploadedFiles.spousePhoto ? 'text-green-600' : 'text-gray-500'}`}>
                   {uploadedFiles.spousePhoto ? uploadedFiles.spousePhoto : '선택한 파일 없음'}
                 </span>
                 {uploadedFiles.spousePhoto && (
-                  <button
-                    type="button"
-                    onClick={() => handleFileDelete('spousePhoto')}
-                    className="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600"
-                  >
-                    파일삭제
-                  </button>
+                  <div className="flex space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => handleFileDownload('spousePhoto')}
+                      disabled={downloadingFiles.spousePhoto}
+                      className={`px-4 py-2 rounded-md ${
+                        downloadingFiles.spousePhoto 
+                          ? 'bg-gray-400 cursor-not-allowed' 
+                          : 'bg-green-500 hover:bg-green-600'
+                      } text-white`}
+                    >
+                      {downloadingFiles.spousePhoto ? '다운로드 중...' : '다운로드'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleFileDelete('spousePhoto')}
+                      disabled={deletingFiles.spousePhoto}
+                      className={`px-4 py-2 rounded-md ${
+                        deletingFiles.spousePhoto 
+                          ? 'bg-gray-400 cursor-not-allowed' 
+                          : 'bg-red-500 hover:bg-red-600'
+                      } text-white`}
+                    >
+                      {deletingFiles.spousePhoto ? '삭제 중...' : '파일삭제'}
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
@@ -1562,40 +1947,73 @@ export default function TycichusPage({ searchParams }: { searchParams: Promise<{
               />
             </div>
             <div className="md:col-span-3">
-              <label className="block text-sm font-medium mb-1">사역자첨부파일</label>
+              <label className="block text-sm font-medium mb-1">
+                사역자첨부파일 
+                <span className="text-red-500 text-xs ml-2">(최대 1MB)</span>
+              </label>
               <div className="flex items-center space-x-4">
                 <input
                   type="file"
                   onChange={(e) => e.target.files && handleFileUpload('attached', e.target.files[0])}
                   className="hidden"
                   id="attached-file-upload"
+                  disabled={!!uploadedFiles.attached}
                 />
                 <label
                   htmlFor="attached-file-upload"
-                  className={`px-4 py-2 rounded-md cursor-pointer ${
-                    uploadingFiles.attached 
+                  className={`px-4 py-2 rounded-md ${
+                    uploadedFiles.attached
+                      ? 'bg-gray-400 cursor-not-allowed text-gray-600'
+                      : uploadingFiles.attached 
                       ? 'bg-gray-400 cursor-not-allowed' 
-                      : 'bg-purple-500 hover:bg-purple-600'
+                        : 'bg-purple-500 hover:bg-purple-600 cursor-pointer'
                   } text-white`}
                 >
-                  {uploadingFiles.attached ? '업로드 중...' : '파일 선택'}
+                  {uploadedFiles.attached 
+                    ? '파일 업로드됨' 
+                    : uploadingFiles.attached 
+                      ? '업로드 중...' 
+                      : '파일 선택'
+                  }
                 </label>
                 <span className={`text-sm ${uploadedFiles.attached ? 'text-green-600' : 'text-gray-500'}`}>
                   {uploadedFiles.attached ? uploadedFiles.attached : '선택한 파일 없음'}
                 </span>
                 {uploadedFiles.attached && (
-                  <button
-                    type="button"
-                    onClick={() => handleFileDelete('attached')}
-                    className="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600"
-                  >
-                    파일삭제
-                  </button>
+                  <div className="flex space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => handleFileDownload('attached')}
+                      disabled={downloadingFiles.attached}
+                      className={`px-4 py-2 rounded-md ${
+                        downloadingFiles.attached 
+                          ? 'bg-gray-400 cursor-not-allowed' 
+                          : 'bg-green-500 hover:bg-green-600'
+                      } text-white`}
+                    >
+                      {downloadingFiles.attached ? '다운로드 중...' : '다운로드'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleFileDelete('attached')}
+                      disabled={deletingFiles.attached}
+                      className={`px-4 py-2 rounded-md ${
+                        deletingFiles.attached 
+                          ? 'bg-gray-400 cursor-not-allowed' 
+                          : 'bg-red-500 hover:bg-red-600'
+                      } text-white`}
+                    >
+                      {deletingFiles.attached ? '삭제 중...' : '파일삭제'}
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
             <div className="md:col-span-3">
-              <label className="block text-sm font-medium mb-1">가족사진파일</label>
+              <label className="block text-sm font-medium mb-1">
+                가족사진파일 
+                <span className="text-red-500 text-xs ml-2">(최대 1MB)</span>
+              </label>
               <div className="flex items-center space-x-4">
                 <input
                   type="file"
@@ -1603,28 +2021,55 @@ export default function TycichusPage({ searchParams }: { searchParams: Promise<{
                   onChange={(e) => e.target.files && handleFileUpload('familyPhoto', e.target.files[0])}
                   className="hidden"
                   id="family-photo-upload"
+                  disabled={!!uploadedFiles.familyPhoto}
                 />
                 <label
                   htmlFor="family-photo-upload"
-                  className={`px-4 py-2 rounded-md cursor-pointer ${
-                    uploadingFiles.familyPhoto 
+                  className={`px-4 py-2 rounded-md ${
+                    uploadedFiles.familyPhoto
+                      ? 'bg-gray-400 cursor-not-allowed text-gray-600'
+                      : uploadingFiles.familyPhoto 
                       ? 'bg-gray-400 cursor-not-allowed' 
-                      : 'bg-purple-500 hover:bg-purple-600'
+                        : 'bg-purple-500 hover:bg-purple-600 cursor-pointer'
                   } text-white`}
                 >
-                  {uploadingFiles.familyPhoto ? '업로드 중...' : '파일 선택'}
+                  {uploadedFiles.familyPhoto 
+                    ? '파일 업로드됨' 
+                    : uploadingFiles.familyPhoto 
+                      ? '업로드 중...' 
+                      : '파일 선택'
+                  }
                 </label>
                 <span className={`text-sm ${uploadedFiles.familyPhoto ? 'text-green-600' : 'text-gray-500'}`}>
                   {uploadedFiles.familyPhoto ? uploadedFiles.familyPhoto : '선택한 파일 없음'}
                 </span>
                 {uploadedFiles.familyPhoto && (
-                  <button
-                    type="button"
-                    onClick={() => handleFileDelete('familyPhoto')}
-                    className="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600"
-                  >
-                    파일삭제
-                  </button>
+                  <div className="flex space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => handleFileDownload('familyPhoto')}
+                      disabled={downloadingFiles.familyPhoto}
+                      className={`px-4 py-2 rounded-md ${
+                        downloadingFiles.familyPhoto 
+                          ? 'bg-gray-400 cursor-not-allowed' 
+                          : 'bg-green-500 hover:bg-green-600'
+                      } text-white`}
+                    >
+                      {downloadingFiles.familyPhoto ? '다운로드 중...' : '다운로드'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleFileDelete('familyPhoto')}
+                      disabled={deletingFiles.familyPhoto}
+                      className={`px-4 py-2 rounded-md ${
+                        deletingFiles.familyPhoto 
+                          ? 'bg-gray-400 cursor-not-allowed' 
+                          : 'bg-red-500 hover:bg-red-600'
+                      } text-white`}
+                    >
+                      {deletingFiles.familyPhoto ? '삭제 중...' : '파일삭제'}
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
