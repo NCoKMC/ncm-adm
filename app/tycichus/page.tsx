@@ -613,13 +613,13 @@ export default function TycichusPage({ searchParams }: { searchParams: Promise<{
         .from('ncm_missionary_files')
         .list(filePath);
 
-      console.log("조회된 파일 목록:", files);
-      console.log("파일 조회 에러:", listError);
+      // console.log("조회된 파일 목록:", files);
+      // console.log("파일 조회 에러:", listError);
 
       if (listError) {
-        console.error('파일 목록 조회 오류:', listError);
-        console.error('에러 메시지:', listError.message);
-        console.error('에러 상세:', listError);
+        // console.error('파일 목록 조회 오류:', listError);
+        // console.error('에러 메시지:', listError.message);
+        // console.error('에러 상세:', listError);
         
         // 인증 관련 오류인지 확인
         if (listError.message.includes('permission') || listError.message.includes('unauthorized') || listError.message.includes('auth')) {
@@ -650,11 +650,11 @@ export default function TycichusPage({ searchParams }: { searchParams: Promise<{
           return;
         }
         
-        console.log('파일 삭제 완료:', filePathsToDelete.length, '개 파일');
+        // console.log('파일 삭제 완료:', filePathsToDelete.length, '개 파일');
       } else {
-        console.log('삭제할 파일이 없습니다.');
-        console.log('files 값:', files);
-        console.log('files 길이:', files ? files.length : 'null/undefined');
+        // console.log('삭제할 파일이 없습니다.');
+        // console.log('files 값:', files);
+        // console.log('files 길이:', files ? files.length : 'null/undefined');
         
         // 파일이 없는 경우에도 사용자에게 알림
         let typeInfo = '';
