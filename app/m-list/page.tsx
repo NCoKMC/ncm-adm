@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import Navigation from '../components/Navigation';
 import { useRouter } from 'next/navigation';
+import ExcelJS from 'exceljs';
+import FileSaver from 'file-saver';
 
 interface MissionaryListItem {
   id: number;
@@ -108,6 +110,49 @@ export default function MListPage() {
     return new Date(dateString).toLocaleDateString('ko-KR');
   };
 
+  const handleExportExcel = async () => {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('사역자 목록');
+
+    // 헤더 설정
+    worksheet.columns = [
+      { header: '사역자ID', key: 'missionary_id', width: 15 },
+      { header: '이름', key: 'korean_name', width: 15 },
+      { header: '사역지', key: 'mission_name', width: 20 },
+      { header: '성별', key: 'gender', width: 10 },
+      { header: '핸드폰', key: 'mobile_phone', width: 20 },
+      { header: '이메일', key: 'email1', width: 30 },
+      { header: '등록일', key: 'created_at', width: 15 }
+    ];
+
+    // 스타일 설정
+    worksheet.getRow(1).font = { bold: true };
+    worksheet.getRow(1).fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFE0E6F3' }
+    };
+
+    // 데이터 추가
+    filteredMissionaries.forEach(missionary => {
+      worksheet.addRow({
+        missionary_id: missionary.missionary_id,
+        korean_name: missionary.korean_name,
+        mission_name: missionary.mission_name || '-',
+        gender: getGenderText(missionary.gender),
+        mobile_phone: missionary.mobile_phone || '-',
+        email1: missionary.email1 || '-',
+        created_at: formatDate(missionary.created_at)
+      });
+    });
+
+    // 엑셀 파일 생성
+    const buffer = await workbook.xlsx.writeBuffer();
+    const fileType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    const blob = new Blob([buffer], { type: fileType });
+    FileSaver.saveAs(blob, `사역자목록_${new Date().toLocaleDateString()}.xlsx`);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -131,12 +176,20 @@ export default function MListPage() {
         <div className="bg-white p-4 rounded-lg shadow-md mb-6">
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-3xl font-bold text-gray-800">사역자 목록</h1>
-            <button
-              onClick={handleAddNew}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:ring-4 focus:ring-blue-300 font-medium"
-            >
-              새 사역자 등록
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={handleExportExcel}
+                className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 focus:ring-4 focus:ring-green-300 font-medium"
+              >
+                엑셀 다운로드
+              </button>
+              <button
+                onClick={handleAddNew}
+                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:ring-4 focus:ring-blue-300 font-medium"
+              >
+                새 사역자 등록
+              </button>
+            </div>
           </div>
         </div>
         {/* 검색 및 정렬 */}
